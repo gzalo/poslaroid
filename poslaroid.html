@@ -1,0 +1,64 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Poslaroid CyberCiruja</title>
+<style>
+  #video {
+    width: 100vw;
+    height: 100vh;
+  }
+  * {
+    margin: 0;
+    padding: 0;
+  }
+</style>
+</head>
+<body>
+<div>
+  <video id="video" width="384" height="512" autoplay></video>
+  <canvas id="canvas" width="384" height="512" style="-webkit-transform: translateZ(0);"></canvas>
+  <img id="photo" src="#" >
+</div>
+
+<script>
+navigator.mediaDevices.getUserMedia({ video: true })
+  .then(function(stream) {
+    var video = document.getElementById('video');
+    video.srcObject = stream;
+    video.play();
+  })
+  .catch(function(err) {
+    console.log("An error occurred: " + err);
+  });
+
+document.getElementById('video').addEventListener('click', function() {
+  var video = document.getElementById('video');
+  var canvas = document.getElementById('canvas');
+  var photo = document.getElementById('photo');
+
+  // Set canvas dimensions to match video stream
+  canvas.width = 384;
+  canvas.height = 512;
+
+  // Draw video frame onto canvas
+  var context = canvas.getContext('2d');
+  context.drawImage(video, 0, 0, canvas.width, canvas.height);
+
+    // Get base64 representation of image data
+    var dataURL = canvas.toDataURL();
+    
+    // Set the base64 representation as the src of the img element
+    photo.setAttribute('src', dataURL);
+
+    photo.style.display = 'inline';
+    // Open URL with the image data
+    var rawbtURL = /*'rawbt:' + */dataURL;
+    //window.open(rawbtURL);
+  
+  
+});
+</script>
+</body>
+</html>

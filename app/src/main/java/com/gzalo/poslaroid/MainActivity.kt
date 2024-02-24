@@ -43,8 +43,8 @@ class MainActivity : AppCompatActivity() {
     private lateinit var viewBinding: ActivityMainBinding
 
     private var imageCapture: ImageCapture? = null
-
     private lateinit var cameraExecutor: ExecutorService
+    private var flashMode: Int = ImageCapture.FLASH_MODE_OFF
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -60,7 +60,24 @@ class MainActivity : AppCompatActivity() {
         checkBluetoothPermissions()
 
         viewBinding.imageCaptureButton.setOnClickListener { takePhoto() }
+        viewBinding.flashToggleButton.setOnClickListener { toggleFlash() }
+
         cameraExecutor = Executors.newSingleThreadExecutor()
+    }
+
+    private fun toggleFlash() {
+        when (flashMode) {
+            ImageCapture.FLASH_MODE_OFF -> {
+                flashMode = ImageCapture.FLASH_MODE_ON;
+                viewBinding.flashToggleButton.setText(R.string.flash_turn_off);
+            }
+            ImageCapture.FLASH_MODE_ON -> {
+                flashMode = ImageCapture.FLASH_MODE_OFF
+                viewBinding.flashToggleButton.setText(R.string.flash_turn_on);
+            }
+        }
+
+        imageCapture?.flashMode = flashMode;
     }
 
     val PERMISSION_BLUETOOTH = 1
@@ -79,7 +96,7 @@ class MainActivity : AppCompatActivity() {
             ActivityCompat.requestPermissions(this, arrayOf(Manifest.permission.BLUETOOTH_SCAN), PERMISSION_BLUETOOTH_SCAN);
         } else {
             Toast.makeText(baseContext,
-                "BT Permission error",
+                "Revisar permisos BT",
                 Toast.LENGTH_SHORT).show()
         }
     }
@@ -248,7 +265,7 @@ class MainActivity : AppCompatActivity() {
             }
             if (!permissionGranted) {
                 Toast.makeText(baseContext,
-                    "Permission request denied",
+                    "Revisiar permisos cámara",
                     Toast.LENGTH_SHORT).show()
             } else {
                 startCamera()

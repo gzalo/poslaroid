@@ -47,6 +47,27 @@ void connectUnixSocket(){
 }
 
 int main(int argc, char *argv[]) {
+    pid_t pid = fork();
+
+    if (pid < 0) {
+        fprintf(stderr, "Fork failed\n");
+        exit(1);
+    }
+
+    if (pid > 0) {
+        printf("Running service in background\n");
+        exit(0);
+    }
+
+    if (setsid() < 0) {
+        fprintf(stderr, "Error: setsid failed\n");
+        exit(1);
+    }
+
+    freopen("/dev/null", "r", stdin);
+    freopen("/tmp/printbridge.log", "a", stdout);
+    freopen("/tmp/printbridge.log", "a", stderr);
+
     sp<IServiceManager> sm = defaultServiceManager();
     sp<IBinder> service = sm->checkService(String16(BINDER_PATH));
 
@@ -85,51 +106,54 @@ int main(int argc, char *argv[]) {
         exit(EXIT_FAILURE);
     }
 
-    printf("Listening for connections on port %d\n", PORT);
-    if ((new_socket = accept(server_fd, (struct sockaddr *)&address,
-                       (socklen_t*)&addrlen))<0) {
-        perror("accept");
-        exit(EXIT_FAILURE);
-    }
-
-    printf("Accepted connection!\n");
-
-    Parcel data, reply;
-    data.writeInterfaceToken(service->getInterfaceDescriptor());
-    service->transact(OPEN_FCN, data, &reply);
-
-    connectUnixSocket();
-
-    while (true) {
-        char buffer[1024] = {0};
-        int data_length = recv(new_socket, buffer, 1024, 0);
-
-        if (data_length <= 0) {
-            break;
+    while(true){
+        printf("Listening for connections on port %d\n", PORT);
+        if ((new_socket = accept(server_fd, (struct sockaddr *)&address,
+                        (socklen_t*)&addrlen))<0) {
+            perror("accept");
+            exit(EXIT_FAILURE);
         }
-        buffer[data_length+1] = 0;
 
-        /*printf("GOT data len %d\n", data_length);
-        for(int i=0;i<data_length;i++) printf("%02x ", buffer[i]);
-        printf("\n");*/
-        
-        Parcel data_stream, reply_stream;
-        data_stream.writeInterfaceToken(String16("android.bluetooth.IPaxBtPrinter"));
-	    data_stream.writeInt32(data_length);
-        data_stream.write(buffer, data_length);
-        data_stream.writeInt32(0);
-        data_stream.writeInt32(data_length);
-        service->transact(WRITE_FCN, data_stream, &reply_stream);
-        printf("Sent %d bytes.\n", data_length);
+        printf("Accepted connection!\n");
+
+        Parcel data, reply;
+        data.writeInterfaceToken(service->getInterfaceDescriptor());
+        service->transact(OPEN_FCN, data, &reply);
+
+        connectUnixSocket();
+
+        while (true) {
+            char buffer[1024] = {0};
+            int data_length = recv(new_socket, buffer, 1024, 0);
+
+            if (data_length <= 0) {
+                break;
+            }
+            buffer[data_length+1] = 0;
+
+            /*printf("GOT data len %d\n", data_length);
+            for(int i=0;i<data_length;i++) printf("%02x ", buffer[i]);
+            printf("\n");*/
+            
+            Parcel data_stream, reply_stream;
+            data_stream.writeInterfaceToken(String16("android.bluetooth.IPaxBtPrinter"));
+            data_stream.writeInt32(data_length);
+            data_stream.write(buffer, data_length);
+            data_stream.writeInt32(0);
+            data_stream.writeInt32(data_length);
+            service->transact(WRITE_FCN, data_stream, &reply_stream);
+            printf("Sent %d bytes.\n", data_length);
+        }
+
+        Parcel data2, reply2;
+        data2.writeInterfaceToken(service->getInterfaceDescriptor());
+        service->transact(CLOSE_FCN, data2, &reply2);
+
+        close(new_socket);
+        printf("Closing and starting new loop!");
     }
-
-    Parcel data2, reply2;
-    data2.writeInterfaceToken(service->getInterfaceDescriptor());
-    service->transact(CLOSE_FCN, data2, &reply2);
-
-    close(new_socket);
     close(server_fd);
-    printf("Thanks!\n");
+
     return 0;
 }
 

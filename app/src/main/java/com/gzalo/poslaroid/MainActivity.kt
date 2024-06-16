@@ -5,11 +5,14 @@ import android.content.ContentValues
 import android.content.pm.PackageManager
 import android.graphics.Bitmap
 import android.graphics.BitmapFactory
+import android.graphics.drawable.BitmapDrawable
+import android.graphics.drawable.Drawable
 import android.os.Build
 import android.os.Bundle
 import android.provider.MediaStore
 import android.util.DisplayMetrics
 import android.util.Log
+import android.view.WindowManager
 import android.widget.Toast
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.appcompat.app.AppCompatActivity
@@ -19,12 +22,8 @@ import androidx.camera.core.ImageCaptureException
 import androidx.camera.core.ImageProxy
 import androidx.camera.core.Preview
 import androidx.camera.lifecycle.ProcessCameraProvider
-import androidx.camera.video.Recorder
-import androidx.camera.video.Recording
-import androidx.camera.video.VideoCapture
 import androidx.core.app.ActivityCompat
 import androidx.core.content.ContextCompat
-import androidx.print.PrintHelper
 import com.dantsu.escposprinter.EscPosPrinter
 import com.dantsu.escposprinter.connection.bluetooth.BluetoothPrintersConnections
 import com.dantsu.escposprinter.textparser.PrinterTextParserImg
@@ -37,32 +36,51 @@ import java.util.concurrent.ExecutorService
 import java.util.concurrent.Executors
 
 
-typealias LumaListener = (luma: Double) -> Unit
-
 class MainActivity : AppCompatActivity() {
     private lateinit var viewBinding: ActivityMainBinding
 
     private var imageCapture: ImageCapture? = null
     private lateinit var cameraExecutor: ExecutorService
     private var flashMode: Int = ImageCapture.FLASH_MODE_OFF
+    private var cameraSelector = CameraSelector.DEFAULT_BACK_CAMERA
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         viewBinding = ActivityMainBinding.inflate(layoutInflater)
         setContentView(viewBinding.root)
 
-        if (allPermissionsGranted()) {
-            startCamera()
+        //to remove "information bar" above the action bar
+        getWindow().setFlags(
+            WindowManager.LayoutParams.FLAG_FULLSCREEN,
+            WindowManager.LayoutParams.FLAG_FULLSCREEN);
+        //to remove the action bar (title bar)
+        getSupportActionBar()?.hide();
+
+        /*if (allPermissionsGranted()) {
         } else {
             requestPermissions()
-        }
+        }*/
 
-        checkBluetoothPermissions()
+        startCamera()
+
 
         viewBinding.imageCaptureButton.setOnClickListener { takePhoto() }
         viewBinding.flashToggleButton.setOnClickListener { toggleFlash() }
+        viewBinding.switchCamera.setOnClickListener { switchCamera() }
 
         cameraExecutor = Executors.newSingleThreadExecutor()
+    }
+
+    private fun switchCamera() {
+        when (cameraSelector){
+            CameraSelector.DEFAULT_BACK_CAMERA -> {
+                cameraSelector = CameraSelector.DEFAULT_FRONT_CAMERA
+            }
+            CameraSelector.DEFAULT_FRONT_CAMERA -> {
+                cameraSelector = CameraSelector.DEFAULT_BACK_CAMERA
+            }
+        }
+        startCamera()
     }
 
     private fun toggleFlash() {
@@ -78,27 +96,6 @@ class MainActivity : AppCompatActivity() {
         }
 
         imageCapture?.flashMode = flashMode;
-    }
-
-    val PERMISSION_BLUETOOTH = 1
-    val PERMISSION_BLUETOOTH_ADMIN = 2
-    val PERMISSION_BLUETOOTH_CONNECT = 3
-    val PERMISSION_BLUETOOTH_SCAN = 4
-
-    private fun checkBluetoothPermissions() {
-        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.S && ContextCompat.checkSelfPermission(this, Manifest.permission.BLUETOOTH) != PackageManager.PERMISSION_GRANTED) {
-            ActivityCompat.requestPermissions(this, arrayOf(Manifest.permission.BLUETOOTH), PERMISSION_BLUETOOTH);
-        } else if (Build.VERSION.SDK_INT < Build.VERSION_CODES.S && ContextCompat.checkSelfPermission(this, Manifest.permission.BLUETOOTH_ADMIN) != PackageManager.PERMISSION_GRANTED) {
-            ActivityCompat.requestPermissions(this, arrayOf(Manifest.permission.BLUETOOTH_ADMIN), PERMISSION_BLUETOOTH_ADMIN);
-        } else if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S && ContextCompat.checkSelfPermission(this, Manifest.permission.BLUETOOTH_CONNECT) != PackageManager.PERMISSION_GRANTED) {
-            ActivityCompat.requestPermissions(this, arrayOf(Manifest.permission.BLUETOOTH_CONNECT), PERMISSION_BLUETOOTH_CONNECT);
-        } else if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S && ContextCompat.checkSelfPermission(this, Manifest.permission.BLUETOOTH_SCAN) != PackageManager.PERMISSION_GRANTED) {
-            ActivityCompat.requestPermissions(this, arrayOf(Manifest.permission.BLUETOOTH_SCAN), PERMISSION_BLUETOOTH_SCAN);
-        } else {
-            Toast.makeText(baseContext,
-                "Revisar permisos BT",
-                Toast.LENGTH_SHORT).show()
-        }
     }
 
     private fun takePhoto() {
@@ -133,65 +130,39 @@ class MainActivity : AppCompatActivity() {
                     Log.e(TAG, "Sacar foto falló: ${exc.message}", exc)
                 }
 
-                override fun
-                        onImageSaved(output: ImageCapture.OutputFileResults){
+                override fun onImageSaved(output: ImageCapture.OutputFileResults){
                     val msg = "Sacada foto OK " + output.savedUri
                     Toast.makeText(baseContext, msg, Toast.LENGTH_SHORT).show()
 
-                    val inputStream: InputStream = context.getContentResolver().openInputStream(output.savedUri ?: return) ?: return
+                    val inputStream: InputStream = context.contentResolver.openInputStream(output.savedUri ?: return) ?: return
                     val bitmap = BitmapFactory.decodeStream(inputStream)
                     inputStream.close()
 
-                    PrintHelper(context).apply {
-                        scaleMode = PrintHelper.SCALE_MODE_FIT
-                    }.also { printHelper ->
-                        printHelper.printBitmap("POSlaroid", bitmap)
-                    }
-
-                    Log.d(TAG, msg)
+                    printBluetooth(bitmap)
                 }
             }
         )
     }
 
-    private fun imageProxyToBitmap(image: ImageProxy): Bitmap {
-        val planeProxy = image.planes[0]
-        val buffer: ByteBuffer = planeProxy.buffer
-        val bytes = ByteArray(buffer.remaining())
-        buffer.get(bytes)
-        return BitmapFactory.decodeByteArray(bytes, 0, bytes.size)
-    }
-
-    private fun printBluetooth() {
+    private fun printBluetooth(bitmap: Bitmap) {
         val printer = EscPosPrinter(BluetoothPrintersConnections.selectFirstPaired(), 203, 48f, 32)
 
-        // 128*128 OK
-        // 256*128 OK
-        // 384*128 NO
+        val resizedBitmap = Bitmap.createScaledBitmap(bitmap, 384, (384 * bitmap.height / bitmap.width.toFloat()).toInt(), true)
 
-        Log.e(
-            "Image is {}", PrinterTextParserImg.bitmapToHexadecimalString(
-                printer,
-                this.applicationContext.resources.getDrawableForDensity(
-                    R.drawable.logo,
-                    DisplayMetrics.DENSITY_MEDIUM
-                )
-            )
-        )
+        val lines = mutableListOf<String>()
+        for (y in 0 until resizedBitmap.height step 32) {
+            val segmentHeight = if (y + 32 > resizedBitmap.height) resizedBitmap.height - y else 32
+            val segment = Bitmap.createBitmap(resizedBitmap, 0, y, resizedBitmap.width, segmentHeight)
+            lines.add("<img>" + PrinterTextParserImg.bitmapToHexadecimalString(printer, segment) + "</img>")
+        }
 
         printer
-            .printFormattedText(
-                "[L]<img>" +
-                        PrinterTextParserImg.bitmapToHexadecimalString(
-                            printer,
-                            this.applicationContext.resources.getDrawableForDensity(
-                                R.drawable.logo,
-                                DisplayMetrics.DENSITY_MEDIUM
-                            )
-                        )
-                        + "</img>\n" +
+            .printFormattedText( lines.joinToString("\n") +
                         "[L]<u><font size='big'>CyberCirujas</font></u>\n" +
-                        "[L]<qrcode size='15'>https://cybercirujas.rebelion.digital</qrcode>\n"
+                        "[L]cybercirujas.rebelion.digital\n" +
+                        "[L]\n" +
+                        "[L]\n"
+
             )
     }
 
@@ -209,8 +180,6 @@ class MainActivity : AppCompatActivity() {
 
             imageCapture = ImageCapture.Builder()
                 .build()
-
-            val cameraSelector = CameraSelector.DEFAULT_BACK_CAMERA
 
             try {
                 cameraProvider.unbindAll()
@@ -246,7 +215,11 @@ class MainActivity : AppCompatActivity() {
         private val REQUIRED_PERMISSIONS =
             mutableListOf (
                 Manifest.permission.CAMERA,
-                Manifest.permission.RECORD_AUDIO
+                Manifest.permission.RECORD_AUDIO,
+                Manifest.permission.BLUETOOTH,
+                Manifest.permission.BLUETOOTH_ADMIN,
+                Manifest.permission.BLUETOOTH_CONNECT,
+                Manifest.permission.BLUETOOTH_SCAN
             ).apply {
                 if (Build.VERSION.SDK_INT <= Build.VERSION_CODES.P) {
                     add(Manifest.permission.WRITE_EXTERNAL_STORAGE)
@@ -258,17 +231,17 @@ class MainActivity : AppCompatActivity() {
         registerForActivityResult(
             ActivityResultContracts.RequestMultiplePermissions())
         { permissions ->
-            var permissionGranted = true
+            /*var permissionGranted = true
             permissions.entries.forEach {
-                if (it.key in REQUIRED_PERMISSIONS && it.value == false)
+                if (it.key in REQUIRED_PERMISSIONS && !it.value)
                     permissionGranted = false
             }
             if (!permissionGranted) {
                 Toast.makeText(baseContext,
-                    "Revisiar permisos cámara",
+                    "Revisar permisos cámara",
                     Toast.LENGTH_SHORT).show()
-            } else {
+            } else {*/
                 startCamera()
-            }
+            //}
         }
 }

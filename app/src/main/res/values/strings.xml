@@ -1,6 +1,7 @@
 <resources>
     <string name="app_name">POSlaroid Cyberciruja</string>
-    <string name="take_photo">Sacar foto</string>
-    <string name="flash_turn_on">Encender Flash</string>
-    <string name="flash_turn_off">Apagar Flash</string>
+    <string name="take_photo">SACAR FOTO E IMPRIMIR</string>
+    <string name="flash_turn_on">Sacando sin flash</string>
+    <string name="flash_turn_off">Sacando con flash</string>
+    <string name="switch_camera">Cambiar cámara</string>
 </resources>

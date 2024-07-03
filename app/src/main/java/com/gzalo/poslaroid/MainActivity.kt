@@ -2,15 +2,12 @@ package com.gzalo.poslaroid
 
 import android.Manifest
 import android.content.ContentValues
-import android.content.pm.PackageManager
 import android.graphics.Bitmap
 import android.graphics.BitmapFactory
-import android.graphics.drawable.BitmapDrawable
-import android.graphics.drawable.Drawable
+import android.graphics.Color
 import android.os.Build
 import android.os.Bundle
 import android.provider.MediaStore
-import android.util.DisplayMetrics
 import android.util.Log
 import android.view.WindowManager
 import android.widget.Toast
@@ -19,17 +16,15 @@ import androidx.appcompat.app.AppCompatActivity
 import androidx.camera.core.CameraSelector
 import androidx.camera.core.ImageCapture
 import androidx.camera.core.ImageCaptureException
-import androidx.camera.core.ImageProxy
 import androidx.camera.core.Preview
 import androidx.camera.lifecycle.ProcessCameraProvider
-import androidx.core.app.ActivityCompat
 import androidx.core.content.ContextCompat
 import com.dantsu.escposprinter.EscPosPrinter
+import com.dantsu.escposprinter.connection.bluetooth.BluetoothConnection
 import com.dantsu.escposprinter.connection.bluetooth.BluetoothPrintersConnections
 import com.dantsu.escposprinter.textparser.PrinterTextParserImg
 import com.gzalo.poslaroid.databinding.ActivityMainBinding
 import java.io.InputStream
-import java.nio.ByteBuffer
 import java.text.SimpleDateFormat
 import java.util.Locale
 import java.util.concurrent.ExecutorService
@@ -43,32 +38,30 @@ class MainActivity : AppCompatActivity() {
     private lateinit var cameraExecutor: ExecutorService
     private var flashMode: Int = ImageCapture.FLASH_MODE_OFF
     private var cameraSelector = CameraSelector.DEFAULT_BACK_CAMERA
+    private var printer: EscPosPrinter? = null
+    private var connection: BluetoothConnection? = null
 
+    @SuppressWarnings("deprecation")
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         viewBinding = ActivityMainBinding.inflate(layoutInflater)
         setContentView(viewBinding.root)
 
-        //to remove "information bar" above the action bar
         getWindow().setFlags(
             WindowManager.LayoutParams.FLAG_FULLSCREEN,
             WindowManager.LayoutParams.FLAG_FULLSCREEN);
-        //to remove the action bar (title bar)
         getSupportActionBar()?.hide();
 
-        /*if (allPermissionsGranted()) {
-        } else {
-            requestPermissions()
-        }*/
-
         startCamera()
-
 
         viewBinding.imageCaptureButton.setOnClickListener { takePhoto() }
         viewBinding.flashToggleButton.setOnClickListener { toggleFlash() }
         viewBinding.switchCamera.setOnClickListener { switchCamera() }
 
         cameraExecutor = Executors.newSingleThreadExecutor()
+
+        connection = BluetoothPrintersConnections.selectFirstPaired()
+        printer = EscPosPrinter(connection, 203, 48f, 32)
     }
 
     private fun switchCamera() {
@@ -119,7 +112,6 @@ class MainActivity : AppCompatActivity() {
                 contentValues)
             .build()
 
-        //printBluetooth()
         val context = this
 
         imageCapture.takePicture(
@@ -145,25 +137,97 @@ class MainActivity : AppCompatActivity() {
     }
 
     private fun printBluetooth(bitmap: Bitmap) {
-        val printer = EscPosPrinter(BluetoothPrintersConnections.selectFirstPaired(), 203, 48f, 32)
-
+        Log.i(TAG, "starting print")
         val resizedBitmap = Bitmap.createScaledBitmap(bitmap, 384, (384 * bitmap.height / bitmap.width.toFloat()).toInt(), true)
+        Log.i(TAG, "resized")
+        val grayscaleBitmap = toGrayscale(resizedBitmap)
+        Log.i(TAG, "grayscaled")
+        val ditheredBitmap = floydSteinbergDithering(grayscaleBitmap)
+        Log.i(TAG, "floydsteinberg")
 
-        val lines = mutableListOf<String>()
-        for (y in 0 until resizedBitmap.height step 32) {
-            val segmentHeight = if (y + 32 > resizedBitmap.height) resizedBitmap.height - y else 32
-            val segment = Bitmap.createBitmap(resizedBitmap, 0, y, resizedBitmap.width, segmentHeight)
-            lines.add("<img>" + PrinterTextParserImg.bitmapToHexadecimalString(printer, segment) + "</img>")
+        val text = StringBuilder()
+        for (y in 0 until ditheredBitmap.height step 32) {
+            val segmentHeight = if (y + 32 > ditheredBitmap.height) ditheredBitmap.height - y else 32
+            val segment = Bitmap.createBitmap(ditheredBitmap, 0, y, ditheredBitmap.width, segmentHeight)
+            text.append("<img>" + PrinterTextParserImg.bitmapToHexadecimalString(printer, segment, false) + "</img>\n")
         }
 
-        printer
-            .printFormattedText( lines.joinToString("\n") +
+        connection?.connect()
+
+        printer?.printFormattedText( text.toString() +
                         "[L]<u><font size='big'>CyberCirujas</font></u>\n" +
                         "[L]cybercirujas.rebelion.digital\n" +
                         "[L]\n" +
                         "[L]\n"
-
             )
+
+        connection?.disconnect()
+    }
+
+    fun toGrayscale(bitmap: Bitmap): Bitmap {
+        val width = bitmap.width
+        val height = bitmap.height
+        val pixels = IntArray(width * height)
+        bitmap.getPixels(pixels, 0, width, 0, 0, width, height)
+
+        val grayPixels = IntArray(width * height)
+
+        for (i in pixels.indices) {
+            val pixel = pixels[i]
+            val red = (pixel shr 16) and 0xFF
+            val green = (pixel shr 8) and 0xFF
+            val blue = pixel and 0xFF
+            val gray = (0.3 * red + 0.59 * green + 0.11 * blue).toInt()
+            val grayPixel = (0xFF shl 24) or (gray shl 16) or (gray shl 8) or gray
+            grayPixels[i] = grayPixel
+        }
+
+        val grayBitmap = Bitmap.createBitmap(width, height, Bitmap.Config.ARGB_8888)
+        grayBitmap.setPixels(grayPixels, 0, width, 0, 0, width, height)
+
+        return grayBitmap
+    }
+
+    fun floydSteinbergDithering(bitmap: Bitmap): Bitmap {
+        val width = bitmap.width
+        val height = bitmap.height
+        val ditheredBitmap = Bitmap.createBitmap(width, height, Bitmap.Config.ARGB_8888)
+
+        val pixels = IntArray(width * height)
+        bitmap.getPixels(pixels, 0, width, 0, 0, width, height)
+
+        val errorDiffusionMatrix = arrayOf(
+            intArrayOf(0, 0, 0, 7),
+            intArrayOf(3, 5, 1, 0)
+        )
+
+        for (y in 0 until height) {
+            for (x in 0 until width) {
+                val index = y * width + x
+                val oldPixel = pixels[index]
+                val oldGray = Color.red(oldPixel)
+                val newGray = if (oldGray > 128) 255 else 0
+                val error = oldGray - newGray
+
+                pixels[index] = Color.rgb(newGray, newGray, newGray)
+
+                for (dy in errorDiffusionMatrix.indices) {
+                    for (dx in errorDiffusionMatrix[dy].indices) {
+                        val newX = x + dx - 1
+                        val newY = y + dy
+                        if (newX < 0 || newX >= width || newY >= height) continue
+                        val newIndex = newY * width + newX
+                        val pixel = pixels[newIndex]
+                        val gray = Color.red(pixel)
+                        val newGrayValue = (gray + error * errorDiffusionMatrix[dy][dx] / 16).coerceIn(0, 255)
+                        pixels[newIndex] = Color.rgb(newGrayValue, newGrayValue, newGrayValue)
+                    }
+                }
+            }
+        }
+
+        ditheredBitmap.setPixels(pixels, 0, width, 0, 0, width, height)
+        return ditheredBitmap
     }
 
     private fun startCamera() {
@@ -194,16 +258,6 @@ class MainActivity : AppCompatActivity() {
         }, ContextCompat.getMainExecutor(this))
     }
 
-
-    private fun requestPermissions() {
-        activityResultLauncher.launch(REQUIRED_PERMISSIONS)
-    }
-
-    private fun allPermissionsGranted() = REQUIRED_PERMISSIONS.all {
-        ContextCompat.checkSelfPermission(
-            baseContext, it) == PackageManager.PERMISSION_GRANTED
-    }
-
     override fun onDestroy() {
         super.onDestroy()
         cameraExecutor.shutdown()
@@ -230,18 +284,6 @@ class MainActivity : AppCompatActivity() {
     private val activityResultLauncher =
         registerForActivityResult(
             ActivityResultContracts.RequestMultiplePermissions())
-        { permissions ->
-            /*var permissionGranted = true
-            permissions.entries.forEach {
-                if (it.key in REQUIRED_PERMISSIONS && !it.value)
-                    permissionGranted = false
-            }
-            if (!permissionGranted) {
-                Toast.makeText(baseContext,
-                    "Revisar permisos cámara",
-                    Toast.LENGTH_SHORT).show()
-            } else {*/
-                startCamera()
-            //}
+        { _ -> startCamera()
         }
 }

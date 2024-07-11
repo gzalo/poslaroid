@@ -9,6 +9,7 @@ import android.os.Build
 import android.os.Bundle
 import android.provider.MediaStore
 import android.util.Log
+import android.view.View
 import android.view.WindowManager
 import android.widget.Toast
 import androidx.activity.result.contract.ActivityResultContracts
@@ -16,6 +17,7 @@ import androidx.appcompat.app.AppCompatActivity
 import androidx.camera.core.CameraSelector
 import androidx.camera.core.ImageCapture
 import androidx.camera.core.ImageCaptureException
+import androidx.camera.core.MirrorMode
 import androidx.camera.core.Preview
 import androidx.camera.lifecycle.ProcessCameraProvider
 import androidx.core.content.ContextCompat
@@ -37,7 +39,7 @@ class MainActivity : AppCompatActivity() {
     private var imageCapture: ImageCapture? = null
     private lateinit var cameraExecutor: ExecutorService
     private var flashMode: Int = ImageCapture.FLASH_MODE_OFF
-    private var cameraSelector = CameraSelector.DEFAULT_BACK_CAMERA
+    private var cameraSelector = CameraSelector.DEFAULT_FRONT_CAMERA
     private var printer: EscPosPrinter? = null
     private var connection: BluetoothConnection? = null
 
@@ -55,8 +57,8 @@ class MainActivity : AppCompatActivity() {
         startCamera()
 
         viewBinding.imageCaptureButton.setOnClickListener { takePhoto() }
-        viewBinding.flashToggleButton.setOnClickListener { toggleFlash() }
-        viewBinding.switchCamera.setOnClickListener { switchCamera() }
+        // viewBinding.flashToggleButton.setOnClickListener { toggleFlash() }
+        // viewBinding.switchCamera.setOnClickListener { switchCamera() }
 
         cameraExecutor = Executors.newSingleThreadExecutor()
 
@@ -80,11 +82,11 @@ class MainActivity : AppCompatActivity() {
         when (flashMode) {
             ImageCapture.FLASH_MODE_OFF -> {
                 flashMode = ImageCapture.FLASH_MODE_ON;
-                viewBinding.flashToggleButton.setText(R.string.flash_turn_off);
+                // viewBinding.flashToggleButton.setText(R.string.flash_turn_off);
             }
             ImageCapture.FLASH_MODE_ON -> {
                 flashMode = ImageCapture.FLASH_MODE_OFF
-                viewBinding.flashToggleButton.setText(R.string.flash_turn_on);
+                // viewBinding.flashToggleButton.setText(R.string.flash_turn_on);
             }
         }
 
@@ -92,6 +94,8 @@ class MainActivity : AppCompatActivity() {
     }
 
     private fun takePhoto() {
+        viewBinding.printing.visibility = View.VISIBLE
+        viewBinding.viewFinder.visibility = View.INVISIBLE
         val imageCapture = imageCapture ?: return
 
         val date = System.currentTimeMillis()
@@ -123,14 +127,16 @@ class MainActivity : AppCompatActivity() {
                 }
 
                 override fun onImageSaved(output: ImageCapture.OutputFileResults){
-                    val msg = "Sacada foto OK " + output.savedUri
-                    Toast.makeText(baseContext, msg, Toast.LENGTH_SHORT).show()
+                    // val msg = "Sacada foto OK " + output.savedUri
+                    // Toast.makeText(baseContext, msg, Toast.LENGTH_SHORT).show()
 
                     val inputStream: InputStream = context.contentResolver.openInputStream(output.savedUri ?: return) ?: return
                     val bitmap = BitmapFactory.decodeStream(inputStream)
                     inputStream.close()
 
                     printBluetooth(bitmap)
+                    viewBinding.printing.visibility = View.INVISIBLE
+                    viewBinding.viewFinder.visibility = View.VISIBLE
                 }
             }
         )
@@ -244,6 +250,8 @@ class MainActivity : AppCompatActivity() {
 
             imageCapture = ImageCapture.Builder()
                 .build()
+
+            viewBinding.viewFinder.scaleX = -1f
 
             try {
                 cameraProvider.unbindAll()

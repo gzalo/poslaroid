@@ -42,6 +42,37 @@
         app:layout_constraintStart_toStartOf="@+id/viewFinder"
         app:layout_constraintTop_toTopOf="parent" />
 
+
+    <Button
+        android:id="@+id/flashToggleButton"
+        android:layout_width="126dp"
+        android:layout_height="60dp"
+        android:layout_marginStart="8dp"
+        android:elevation="2dp"
+        android:text="@string/flash_turn_on"
+        app:layout_constraintBottom_toTopOf="@+id/image_capture_button"
+        app:layout_constraintStart_toStartOf="parent" />
+
+    <Button
+        android:id="@+id/switchCamera"
+        android:layout_width="126dp"
+        android:layout_height="60dp"
+        android:layout_marginStart="8dp"
+        android:elevation="2dp"
+        android:text="@string/switch_camera"
+        app:layout_constraintBottom_toTopOf="@+id/image_capture_button"
+        app:layout_constraintStart_toEndOf="@+id/flashToggleButton" />
+
+    <Button
+        android:id="@+id/mirrorCamera"
+        android:layout_width="126dp"
+        android:layout_height="60dp"
+        android:layout_marginStart="8dp"
+        android:elevation="2dp"
+        android:text="@string/mirror_camera"
+        app:layout_constraintBottom_toTopOf="@+id/image_capture_button"
+        app:layout_constraintStart_toEndOf="@+id/switchCamera" />
+
     <Button
         android:id="@+id/image_capture_button"
         android:layout_width="match_parent"

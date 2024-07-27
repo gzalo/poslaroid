@@ -1,7 +1,9 @@
 package com.gzalo.poslaroid
 
 import android.Manifest
+import android.annotation.SuppressLint
 import android.content.ContentValues
+import android.content.pm.PackageManager
 import android.graphics.Bitmap
 import android.graphics.BitmapFactory
 import android.graphics.Color
@@ -14,10 +16,10 @@ import android.view.WindowManager
 import android.widget.Toast
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.appcompat.app.AppCompatActivity
+import androidx.camera.core.CameraProvider
 import androidx.camera.core.CameraSelector
 import androidx.camera.core.ImageCapture
 import androidx.camera.core.ImageCaptureException
-import androidx.camera.core.MirrorMode
 import androidx.camera.core.Preview
 import androidx.camera.lifecycle.ProcessCameraProvider
 import androidx.core.content.ContextCompat
@@ -43,6 +45,7 @@ class MainActivity : AppCompatActivity() {
     private var printer: EscPosPrinter? = null
     private var connection: BluetoothConnection? = null
 
+    @SuppressLint("MissingPermission")
     @SuppressWarnings("deprecation")
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -54,16 +57,39 @@ class MainActivity : AppCompatActivity() {
             WindowManager.LayoutParams.FLAG_FULLSCREEN);
         getSupportActionBar()?.hide();
 
-        startCamera()
+        if (allPermissionsGranted()) {
+            startCamera()
+        } else {
+            requestPermissions()
+        }
 
         viewBinding.imageCaptureButton.setOnClickListener { takePhoto() }
-        // viewBinding.flashToggleButton.setOnClickListener { toggleFlash() }
-        // viewBinding.switchCamera.setOnClickListener { switchCamera() }
+        viewBinding.flashToggleButton.setOnClickListener { toggleFlash() }
+        viewBinding.switchCamera.setOnClickListener { switchCamera() }
+        viewBinding.mirrorCamera.setOnClickListener { mirrorCamera() }
 
         cameraExecutor = Executors.newSingleThreadExecutor()
 
         connection = BluetoothPrintersConnections.selectFirstPaired()
+        if (connection == null){
+            Toast.makeText(baseContext, "Es necesario ir a los ajustes de bluetooth y vincular la impresora", Toast.LENGTH_SHORT).show()
+        } else {
+            Toast.makeText(baseContext, "Conectado al dispositivo: " + connection?.device?.name, Toast.LENGTH_SHORT).show()
+        }
         printer = EscPosPrinter(connection, 203, 48f, 32)
+    }
+
+    private fun mirrorCamera() {
+        viewBinding.viewFinder.scaleX *= -1f
+    }
+
+    private fun requestPermissions() {
+        activityResultLauncher.launch(REQUIRED_PERMISSIONS)
+    }
+
+    private fun allPermissionsGranted() = REQUIRED_PERMISSIONS.all {
+        ContextCompat.checkSelfPermission(
+            baseContext, it) == PackageManager.PERMISSION_GRANTED
     }
 
     private fun switchCamera() {
@@ -82,11 +108,11 @@ class MainActivity : AppCompatActivity() {
         when (flashMode) {
             ImageCapture.FLASH_MODE_OFF -> {
                 flashMode = ImageCapture.FLASH_MODE_ON;
-                // viewBinding.flashToggleButton.setText(R.string.flash_turn_off);
+                viewBinding.flashToggleButton.setText(R.string.flash_turn_off);
             }
             ImageCapture.FLASH_MODE_ON -> {
                 flashMode = ImageCapture.FLASH_MODE_OFF
-                // viewBinding.flashToggleButton.setText(R.string.flash_turn_on);
+                viewBinding.flashToggleButton.setText(R.string.flash_turn_on);
             }
         }
 
@@ -96,6 +122,11 @@ class MainActivity : AppCompatActivity() {
     private fun takePhoto() {
         viewBinding.printing.visibility = View.VISIBLE
         viewBinding.viewFinder.visibility = View.INVISIBLE
+
+        viewBinding.flashToggleButton.visibility = View.INVISIBLE
+        viewBinding.switchCamera.visibility = View.INVISIBLE
+        viewBinding.mirrorCamera.visibility = View.INVISIBLE
+
         val imageCapture = imageCapture ?: return
 
         val date = System.currentTimeMillis()
@@ -161,7 +192,9 @@ class MainActivity : AppCompatActivity() {
         connection?.connect()
 
         printer?.printFormattedText( text.toString() +
-                        "[L]<u><font size='big'>CyberCirujas</font></u>\n" +
+                        "[L]Yo estuve con\n" +
+                        "[L]<b><font size='tall'>CyberCirujas</font></b>\n" +
+                        "[L]en el CCK\n" +
                         "[L]cybercirujas.rebelion.digital\n" +
                         "[L]\n" +
                         "[L]\n"
@@ -237,6 +270,7 @@ class MainActivity : AppCompatActivity() {
     }
 
     private fun startCamera() {
+
         val cameraProviderFuture = ProcessCameraProvider.getInstance(this)
 
         cameraProviderFuture.addListener({

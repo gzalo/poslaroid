@@ -126,6 +126,7 @@ class MainActivity : AppCompatActivity() {
         viewBinding.flashToggleButton.visibility = View.INVISIBLE
         viewBinding.switchCamera.visibility = View.INVISIBLE
         viewBinding.mirrorCamera.visibility = View.INVISIBLE
+        viewBinding.footerText.visibility = View.INVISIBLE
 
         val imageCapture = imageCapture ?: return
 
@@ -191,14 +192,7 @@ class MainActivity : AppCompatActivity() {
 
         connection?.connect()
 
-        printer?.printFormattedText( text.toString() +
-                        "[L]Yo estuve con\n" +
-                        "[L]<b><font size='tall'>CyberCirujas</font></b>\n" +
-                        "[L]en el CCK\n" +
-                        "[L]cybercirujas.rebelion.digital\n" +
-                        "[L]\n" +
-                        "[L]\n"
-            )
+        printer?.printFormattedText( text.toString() + viewBinding.footerText.text)
 
         connection?.disconnect()
     }

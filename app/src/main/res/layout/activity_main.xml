@@ -42,6 +42,17 @@
         app:layout_constraintStart_toStartOf="@+id/viewFinder"
         app:layout_constraintTop_toTopOf="parent" />
 
+    <EditText
+        android:id="@+id/footerText"
+        android:layout_width="300dp"
+        android:layout_height="200dp"
+        android:ems="10"
+        android:gravity="start|top"
+        android:inputType="textMultiLine"
+        android:text="@string/footerText"
+        app:layout_constraintBottom_toTopOf="@+id/switchCamera"
+        app:layout_constraintEnd_toEndOf="parent"
+        app:layout_constraintStart_toStartOf="@+id/viewFinder" />
 
     <Button
         android:id="@+id/flashToggleButton"

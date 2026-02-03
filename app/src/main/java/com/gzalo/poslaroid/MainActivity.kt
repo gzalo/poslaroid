@@ -16,7 +16,6 @@ import android.view.WindowManager
 import android.widget.Toast
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.appcompat.app.AppCompatActivity
-import androidx.camera.core.CameraProvider
 import androidx.camera.core.CameraSelector
 import androidx.camera.core.ImageCapture
 import androidx.camera.core.ImageCaptureException
@@ -28,7 +27,10 @@ import com.dantsu.escposprinter.connection.bluetooth.BluetoothConnection
 import com.dantsu.escposprinter.connection.bluetooth.BluetoothPrintersConnections
 import com.dantsu.escposprinter.textparser.PrinterTextParserImg
 import com.gzalo.poslaroid.databinding.ActivityMainBinding
+import java.io.ByteArrayOutputStream
 import java.io.InputStream
+import java.net.HttpURLConnection
+import java.net.URL
 import java.text.SimpleDateFormat
 import java.util.Locale
 import java.util.concurrent.ExecutorService
@@ -44,6 +46,9 @@ class MainActivity : AppCompatActivity() {
     private var cameraSelector = CameraSelector.DEFAULT_FRONT_CAMERA
     private var printer: EscPosPrinter? = null
     private var connection: BluetoothConnection? = null
+
+    // Store the captured bitmap for style processing
+    private var capturedBitmap: Bitmap? = null
 
     @SuppressLint("MissingPermission")
     @SuppressWarnings("deprecation")
@@ -67,6 +72,14 @@ class MainActivity : AppCompatActivity() {
         viewBinding.flashToggleButton.setOnClickListener { toggleFlash() }
         viewBinding.switchCamera.setOnClickListener { switchCamera() }
         viewBinding.mirrorCamera.setOnClickListener { mirrorCamera() }
+
+        // Setup style button click listeners
+        viewBinding.styleNormal.setOnClickListener { onStyleSelected(null) }
+        viewBinding.styleCartoon.setOnClickListener { onStyleSelected("cartoon") }
+        viewBinding.styleAnime.setOnClickListener { onStyleSelected("anime") }
+        viewBinding.styleSketch.setOnClickListener { onStyleSelected("pencil sketch") }
+        viewBinding.styleOilPainting.setOnClickListener { onStyleSelected("oil painting") }
+        viewBinding.stylePixelArt.setOnClickListener { onStyleSelected("pixel art") }
 
         cameraExecutor = Executors.newSingleThreadExecutor()
 
@@ -120,6 +133,8 @@ class MainActivity : AppCompatActivity() {
     }
 
     private fun takePhoto() {
+        // Show initial message
+        viewBinding.printing.text = getString(R.string.preparing_photo)
         viewBinding.printing.visibility = View.VISIBLE
         viewBinding.viewFinder.visibility = View.INVISIBLE
 
@@ -127,6 +142,8 @@ class MainActivity : AppCompatActivity() {
         viewBinding.switchCamera.visibility = View.INVISIBLE
         viewBinding.mirrorCamera.visibility = View.INVISIBLE
         viewBinding.footerText.visibility = View.INVISIBLE
+        viewBinding.apiUrl.visibility = View.INVISIBLE
+        viewBinding.imageCaptureButton.visibility = View.INVISIBLE
 
         val imageCapture = imageCapture ?: return
 
@@ -156,45 +173,165 @@ class MainActivity : AppCompatActivity() {
             object : ImageCapture.OnImageSavedCallback {
                 override fun onError(exc: ImageCaptureException) {
                     Log.e(TAG, "Sacar foto falló: ${exc.message}", exc)
+                    resetUI()
                 }
 
                 override fun onImageSaved(output: ImageCapture.OutputFileResults){
-                    // val msg = "Sacada foto OK " + output.savedUri
-                    // Toast.makeText(baseContext, msg, Toast.LENGTH_SHORT).show()
-
                     val inputStream: InputStream = context.contentResolver.openInputStream(output.savedUri ?: return) ?: return
-                    val bitmap = BitmapFactory.decodeStream(inputStream)
+                    capturedBitmap = BitmapFactory.decodeStream(inputStream)
                     inputStream.close()
 
-                    printBluetooth(bitmap)
-                    viewBinding.printing.visibility = View.INVISIBLE
-                    viewBinding.viewFinder.visibility = View.VISIBLE
+                    // Show style selection grid with preview
+                    runOnUiThread {
+                        viewBinding.printing.visibility = View.INVISIBLE
+                        viewBinding.previewImage.setImageBitmap(capturedBitmap)
+                        viewBinding.styleSelectionContainer.visibility = View.VISIBLE
+                    }
                 }
             }
         )
     }
 
-    private fun printBluetooth(bitmap: Bitmap) {
-        Log.i(TAG, "starting print")
-        val resizedBitmap = Bitmap.createScaledBitmap(bitmap, 384, (384 * bitmap.height / bitmap.width.toFloat()).toInt(), true)
-        Log.i(TAG, "resized")
-        val grayscaleBitmap = toGrayscale(resizedBitmap)
-        Log.i(TAG, "grayscaled")
-        val ditheredBitmap = floydSteinbergDithering(grayscaleBitmap)
-        Log.i(TAG, "floydsteinberg")
+    private fun onStyleSelected(style: String?) {
+        val bitmap = capturedBitmap ?: return
 
-        val text = StringBuilder()
-        for (y in 0 until ditheredBitmap.height step 32) {
-            val segmentHeight = if (y + 32 > ditheredBitmap.height) ditheredBitmap.height - y else 32
-            val segment = Bitmap.createBitmap(ditheredBitmap, 0, y, ditheredBitmap.width, segmentHeight)
-            text.append("<img>" + PrinterTextParserImg.bitmapToHexadecimalString(printer, segment, false) + "</img>\n")
+        // Hide style selection, show processing message
+        viewBinding.styleSelectionContainer.visibility = View.GONE
+        viewBinding.printing.visibility = View.VISIBLE
+
+        if (style == null) {
+            // Normal mode - just print directly
+            viewBinding.printing.text = getString(R.string.sending_to_printer)
+            Thread {
+                printBluetooth(bitmap)
+                runOnUiThread { resetUI() }
+            }.start()
+        } else {
+            // Process through API with selected style
+            Thread {
+                runOnUiThread {
+                    viewBinding.printing.text = getString(R.string.processing_cartoon)
+                }
+
+                val processedBitmap = processStyleApi(bitmap, style)
+                val finalBitmap = processedBitmap ?: bitmap
+
+                if (processedBitmap == null) {
+                    runOnUiThread {
+                        Toast.makeText(baseContext, "Error en procesamiento, usando foto original", Toast.LENGTH_SHORT).show()
+                    }
+                }
+
+                runOnUiThread {
+                    viewBinding.printing.text = getString(R.string.sending_to_printer)
+                }
+
+                printBluetooth(finalBitmap)
+                runOnUiThread { resetUI() }
+            }.start()
         }
+    }
 
-        connection?.connect()
+    private fun resetUI() {
+        capturedBitmap = null
+        viewBinding.viewFinder.visibility = View.VISIBLE
+        viewBinding.printing.visibility = View.INVISIBLE
+        viewBinding.styleSelectionContainer.visibility = View.GONE
+        /*viewBinding.flashToggleButton.visibility = View.VISIBLE
+        viewBinding.switchCamera.visibility = View.VISIBLE
+        viewBinding.mirrorCamera.visibility = View.VISIBLE
+        viewBinding.footerText.visibility = View.VISIBLE*/
+        viewBinding.imageCaptureButton.visibility = View.VISIBLE
+    }
 
-        printer?.printFormattedText( text.toString() + viewBinding.footerText.text)
+    private fun processStyleApi(bitmap: Bitmap, style: String): Bitmap? {
+        try {
+            val apiUrlText = viewBinding.apiUrl.text.toString()
+            val url = URL(apiUrlText)
+            val httpConnection = url.openConnection() as HttpURLConnection
+            httpConnection.requestMethod = "POST"
+            httpConnection.doOutput = true
+            httpConnection.doInput = true
+            httpConnection.setRequestProperty("Content-Type", "multipart/form-data; boundary=----WebKitFormBoundary")
 
-        connection?.disconnect()
+            val boundary = "----WebKitFormBoundary"
+            val outputStream = httpConnection.outputStream
+
+            // Convert bitmap to JPEG bytes
+            val byteArrayOutputStream = ByteArrayOutputStream()
+            bitmap.compress(Bitmap.CompressFormat.JPEG, 90, byteArrayOutputStream)
+            val imageBytes = byteArrayOutputStream.toByteArray()
+
+            // Write multipart form data with image
+            val writer = outputStream.bufferedWriter()
+            writer.write("--$boundary\r\n")
+            writer.write("Content-Disposition: form-data; name=\"image\"; filename=\"input.jpg\"\r\n")
+            writer.write("Content-Type: image/jpeg\r\n\r\n")
+            writer.flush()
+            outputStream.write(imageBytes)
+            outputStream.flush()
+
+            // Add style field
+            writer.write("\r\n--$boundary\r\n")
+            writer.write("Content-Disposition: form-data; name=\"style\"\r\n\r\n")
+            writer.write(style)
+            writer.write("\r\n--$boundary--\r\n")
+            writer.flush()
+            writer.close()
+
+            val responseCode = httpConnection.responseCode
+            if (responseCode == HttpURLConnection.HTTP_OK) {
+                val responseStream = httpConnection.inputStream
+                val resultBitmap = BitmapFactory.decodeStream(responseStream)
+                responseStream.close()
+                httpConnection.disconnect()
+                return resultBitmap
+            } else {
+                Log.e(TAG, "Style API error: $responseCode")
+                httpConnection.disconnect()
+                return null
+            }
+        } catch (e: Exception) {
+            Log.e(TAG, "Style API exception: ${e.message}", e)
+            return null
+        }
+    }
+
+    private fun printBluetooth(bitmap: Bitmap) {
+        try {
+            Log.i(TAG, "starting print")
+            val resizedBitmap = Bitmap.createScaledBitmap(bitmap, 384, (384 * bitmap.height / bitmap.width.toFloat()).toInt(), true)
+            Log.i(TAG, "resized")
+            val grayscaleBitmap = toGrayscale(resizedBitmap)
+            Log.i(TAG, "grayscaled")
+            val ditheredBitmap = floydSteinbergDithering(grayscaleBitmap)
+            Log.i(TAG, "floydsteinberg")
+
+            val text = StringBuilder()
+            for (y in 0 until ditheredBitmap.height step 32) {
+                val segmentHeight =
+                    if (y + 32 > ditheredBitmap.height) ditheredBitmap.height - y else 32
+                val segment =
+                    Bitmap.createBitmap(ditheredBitmap, 0, y, ditheredBitmap.width, segmentHeight)
+                text.append(
+                    "<img>" + PrinterTextParserImg.bitmapToHexadecimalString(
+                        printer,
+                        segment,
+                        false
+                    ) + "</img>\n"
+                )
+            }
+
+            connection?.connect()
+            printer?.printFormattedText( text.toString() + viewBinding.footerText.text)
+            Thread.sleep(3000);
+            connection?.disconnect()
+        } catch (e: Exception) {
+            Log.e(TAG, "Print error: ${e.message}", e)
+            runOnUiThread {
+                Toast.makeText(baseContext, "Error de impresión: ${e.message}", Toast.LENGTH_LONG).show()
+            }
+        }
     }
 
     fun toGrayscale(bitmap: Bitmap): Bitmap {

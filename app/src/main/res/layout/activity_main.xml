@@ -42,10 +42,108 @@
         app:layout_constraintStart_toStartOf="@+id/viewFinder"
         app:layout_constraintTop_toTopOf="parent" />
 
+    <LinearLayout
+        android:id="@+id/styleSelectionContainer"
+        android:layout_width="match_parent"
+        android:layout_height="match_parent"
+        android:orientation="vertical"
+        android:gravity="center"
+        android:background="#CC000000"
+        android:visibility="gone"
+        app:layout_constraintTop_toTopOf="parent"
+        app:layout_constraintBottom_toBottomOf="parent"
+        app:layout_constraintStart_toStartOf="parent"
+        app:layout_constraintEnd_toEndOf="parent">
+
+        <ImageView
+            android:id="@+id/previewImage"
+            android:layout_width="200dp"
+            android:layout_height="200dp"
+            android:layout_marginBottom="16dp"
+            android:scaleType="centerCrop"
+            android:background="#333333" />
+
+        <TextView
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="@string/choose_style"
+            android:textColor="#FFFFFF"
+            android:textSize="24sp"
+            android:textStyle="bold"
+            android:layout_marginBottom="16dp" />
+
+        <GridLayout
+            android:id="@+id/styleGrid"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:columnCount="2"
+            android:rowCount="3"
+            android:alignmentMode="alignMargins"
+            android:useDefaultMargins="true">
+
+            <Button
+                android:id="@+id/styleNormal"
+                android:layout_width="150dp"
+                android:layout_height="80dp"
+                android:text="@string/style_normal"
+                android:layout_margin="8dp" />
+
+            <Button
+                android:id="@+id/styleCartoon"
+                android:layout_width="150dp"
+                android:layout_height="80dp"
+                android:text="@string/style_cartoon"
+                android:layout_margin="8dp" />
+
+            <Button
+                android:id="@+id/styleAnime"
+                android:layout_width="150dp"
+                android:layout_height="80dp"
+                android:text="@string/style_anime"
+                android:layout_margin="8dp" />
+
+            <Button
+                android:id="@+id/styleSketch"
+                android:layout_width="150dp"
+                android:layout_height="80dp"
+                android:text="@string/style_sketch"
+                android:layout_margin="8dp" />
+
+            <Button
+                android:id="@+id/styleOilPainting"
+                android:layout_width="150dp"
+                android:layout_height="80dp"
+                android:text="@string/style_oil_painting"
+                android:layout_margin="8dp" />
+
+            <Button
+                android:id="@+id/stylePixelArt"
+                android:layout_width="150dp"
+                android:layout_height="80dp"
+                android:text="@string/style_pixel_art"
+                android:layout_margin="8dp" />
+
+        </GridLayout>
+
+    </LinearLayout>
+
+    <EditText
+        android:id="@+id/apiUrl"
+        android:layout_width="300dp"
+        android:layout_height="48dp"
+        android:ems="10"
+        android:gravity="start|center_vertical"
+        android:inputType="textUri"
+        android:text="@string/apiUrl"
+        android:hint="API URL"
+        app:layout_constraintBottom_toTopOf="@+id/footerText"
+        app:layout_constraintEnd_toEndOf="parent"
+        app:layout_constraintStart_toStartOf="@+id/viewFinder" />
+
     <EditText
         android:id="@+id/footerText"
         android:layout_width="300dp"
-        android:layout_height="200dp"
+        android:layout_height="150dp"
         android:ems="10"
         android:gravity="start|top"
         android:inputType="textMultiLine"
@@ -86,20 +184,21 @@
 
     <Button
         android:id="@+id/image_capture_button"
-        android:layout_width="match_parent"
+        android:layout_width="0dp"
         android:layout_height="130dp"
-        android:text="@string/take_photo"
+        android:layout_marginEnd="4dp"
         android:layout_marginBottom="8dp"
-        android:layout_marginStart="8dp"
-        android:layout_marginEnd="8dp"
-        android:elevation="2dp"
         android:drawableTop="@drawable/ic_camera"
+        android:elevation="2dp"
         android:gravity="center"
         android:paddingTop="16dp"
         android:paddingBottom="16dp"
+        android:text="@string/take_photo"
+        android:textSize="22sp"
         android:visibility="visible"
-        android:textSize="28sp"
         app:layout_constraintBottom_toBottomOf="parent"
+        app:layout_constraintEnd_toEndOf="parent"
+        app:layout_constraintHorizontal_weight="1"
         app:layout_constraintStart_toStartOf="parent" />
 
 </androidx.constraintlayout.widget.ConstraintLayout>

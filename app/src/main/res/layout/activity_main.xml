@@ -42,6 +42,16 @@
         app:layout_constraintStart_toStartOf="@+id/viewFinder"
         app:layout_constraintTop_toTopOf="parent" />
 
+    <com.gzalo.poslaroid.CircularCountdownView
+        android:id="@+id/countdownView"
+        android:layout_width="200dp"
+        android:layout_height="200dp"
+        android:visibility="invisible"
+        app:layout_constraintBottom_toBottomOf="parent"
+        app:layout_constraintEnd_toEndOf="parent"
+        app:layout_constraintStart_toStartOf="parent"
+        app:layout_constraintTop_toTopOf="parent" />
+
     <LinearLayout
         android:id="@+id/styleSelectionContainer"
         android:layout_width="match_parent"
@@ -72,64 +82,26 @@
             android:textStyle="bold"
             android:layout_marginBottom="16dp" />
 
-        <GridLayout
-            android:id="@+id/styleGrid"
+        <ScrollView
             android:layout_width="wrap_content"
-            android:layout_height="wrap_content"
-            android:columnCount="2"
-            android:rowCount="3"
-            android:alignmentMode="alignMargins"
-            android:useDefaultMargins="true">
+            android:layout_height="0dp"
+            android:layout_weight="1">
 
-            <Button
-                android:id="@+id/styleNormal"
-                android:layout_width="150dp"
-                android:layout_height="80dp"
-                android:text="@string/style_normal"
-                android:layout_margin="8dp" />
+            <GridLayout
+                android:id="@+id/styleGrid"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:columnCount="2"
+                android:alignmentMode="alignMargins"
+                android:useDefaultMargins="true" />
 
-            <Button
-                android:id="@+id/styleCartoon"
-                android:layout_width="150dp"
-                android:layout_height="80dp"
-                android:text="@string/style_cartoon"
-                android:layout_margin="8dp" />
-
-            <Button
-                android:id="@+id/styleAnime"
-                android:layout_width="150dp"
-                android:layout_height="80dp"
-                android:text="@string/style_anime"
-                android:layout_margin="8dp" />
-
-            <Button
-                android:id="@+id/styleSketch"
-                android:layout_width="150dp"
-                android:layout_height="80dp"
-                android:text="@string/style_sketch"
-                android:layout_margin="8dp" />
-
-            <Button
-                android:id="@+id/styleOilPainting"
-                android:layout_width="150dp"
-                android:layout_height="80dp"
-                android:text="@string/style_oil_painting"
-                android:layout_margin="8dp" />
-
-            <Button
-                android:id="@+id/stylePixelArt"
-                android:layout_width="150dp"
-                android:layout_height="80dp"
-                android:text="@string/style_pixel_art"
-                android:layout_margin="8dp" />
-
-        </GridLayout>
+        </ScrollView>
 
     </LinearLayout>
 
     <EditText
         android:id="@+id/apiUrl"
-        android:layout_width="300dp"
+        android:layout_width="0dp"
         android:layout_height="48dp"
         android:ems="10"
         android:gravity="start|center_vertical"
@@ -137,8 +109,18 @@
         android:text="@string/apiUrl"
         android:hint="API URL"
         app:layout_constraintBottom_toTopOf="@+id/footerText"
-        app:layout_constraintEnd_toEndOf="parent"
+        app:layout_constraintEnd_toStartOf="@+id/loadStylesButton"
         app:layout_constraintStart_toStartOf="@+id/viewFinder" />
+
+    <Button
+        android:id="@+id/loadStylesButton"
+        android:layout_width="wrap_content"
+        android:layout_height="48dp"
+        android:text="@string/load_styles_button"
+        android:textSize="12sp"
+        app:layout_constraintBottom_toBottomOf="@+id/apiUrl"
+        app:layout_constraintEnd_toEndOf="parent"
+        app:layout_constraintTop_toTopOf="@+id/apiUrl" />
 
     <EditText
         android:id="@+id/footerText"

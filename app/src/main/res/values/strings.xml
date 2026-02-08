@@ -11,17 +11,13 @@
     <string name="apiUrl">http://192.168.1.4:5000/process</string>
 
     <!-- Funny messages during photo process -->
-    <string name="photo_taken_can_move">¡Listo! Ya podés moverte</string>
-    <string name="processing_cartoon">Transformando…\n¡Aguantá unos segundos!</string>
-    <string name="sending_to_printer">Mandando a la impresora…\n¡No te vayas que ya sale!</string>
-    <string name="preparing_photo">Preparando la foto…\n¡NO TE MUEVAS!</string>
+    <string name="processing_cartoon">¡Esperá unos segundos!</string>
+    <string name="sending_to_printer">Imprimiendo</string>
+    <string name="preparing_photo">¡NO TE MUEVAS!</string>
 
     <!-- Style selection -->
     <string name="choose_style">¡Elegí un estilo!</string>
     <string name="style_normal">NORMAL</string>
-    <string name="style_cartoon">CARTOON</string>
-    <string name="style_anime">ANIME</string>
-    <string name="style_sketch">BOCETO</string>
-    <string name="style_oil_painting">ÓLEO</string>
-    <string name="style_pixel_art">PIXEL ART</string>
+    <string name="loading_styles">Cargando estilos…</string>
+    <string name="load_styles_button">Cargar estilos</string>
 </resources>

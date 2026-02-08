@@ -20,6 +20,121 @@ COMFYUI_URL = "127.0.0.1:8188"
 WORKFLOW_FILE = "workflow_api.json"  # Export from ComfyUI with "Save (API Format)"
 OUTPUT_DIR = "outputs"
 
+# Each style has a display name and a complete prompt tailored for thermal printer output.
+STYLES = {
+    "cartoon": {
+        "name": "CARTOON",
+        "prompt": (
+            "Transform this photo into a bold cartoon illustration with thick black outlines "
+            "and flat color areas. Use strong contrast between light and dark regions. "
+            "Keep large white areas and avoid heavy shading. "
+            "Preserve facial features and expression faithfully. "
+            "The result should print well on a thermal printer with limited grayscale."
+        ),
+    },
+    "anime": {
+        "name": "ANIME",
+        "prompt": (
+            "Convert this photo into a clean anime illustration style with sharp linework "
+            "and cel-shaded lighting. Use minimal gradients, prefer flat tones with clear "
+            "separation between light and shadow. Keep backgrounds simple and bright. "
+            "Preserve the person's facial features and expression. "
+            "Optimize for black and white thermal printing with good contrast."
+        ),
+    },
+    "pencil_sketch": {
+        "name": "BOCETO",
+        "prompt": (
+            "Transform this photo into a detailed pencil sketch drawing on white paper. "
+            "Use fine hatching and cross-hatching for shading. Keep most of the image light "
+            "with darker pencil strokes only for shadows and contours. "
+            "The sketch should feel hand-drawn with visible pencil texture. "
+            "Preserve the subject's likeness and facial features. "
+            "Ideal for thermal printer: mostly white with delicate gray linework."
+        ),
+    },
+    "8bit": {
+        "name": "8-BIT RETRO",
+        "prompt": (
+            "Convert this photo into a retro 8-bit pixel art style, as if from a classic "
+            "video game console. Use large visible square pixels with a very limited palette. "
+            "Simplify details into blocky shapes. Add a slight scanline or CRT feel. "
+            "Keep the overall image bright with good contrast between pixel blocks. "
+            "Preserve the subject's recognizable features in simplified pixel form. "
+            "Should work well as a small, high-contrast image on a thermal printer."
+        ),
+    },
+    #"woodcut": {
+    #    "name": "GRABADO",
+    #    "prompt": (
+    #        "Transform this photo into a traditional woodcut print illustration. "
+    #        "Use bold black lines carved into white space, with parallel line hatching "
+    #        "for mid-tones. The style should resemble a hand-carved woodblock print "
+    #        "with strong graphic contrast. Keep large areas of pure white and pure black. "
+    #        "Preserve the subject's facial features with simplified but recognizable forms. "
+    #        "Perfect for thermal printing: naturally high contrast black and white."
+    #    ),
+    #},
+    "pop_art": {
+        "name": "POP ART",
+        "prompt": (
+            "Convert this photo into a bold pop art style inspired by Roy Lichtenstein "
+            "and Andy Warhol. Use high contrast with strong outlines, quite big Ben-Day dots pattern "
+            "for shading, and dramatic light/shadow separation. "
+            "Make the image graphic and punchy with simplified forms. "
+            "Preserve the subject's face with stylized but recognizable features. "
+            "The pop art dots and bold lines will create interesting dithering patterns "
+            "on a thermal printer."
+        ),
+    },
+    "caricature": {
+        "name": "CARICATURA",
+        "prompt": (
+            "Transform this photo into a fun caricature with slightly exaggerated facial "
+            "features and proportions. Use a clean cartoon style with bold outlines "
+            "and playful exaggeration of distinctive features like nose, eyes, or smile. "
+            "Keep the background minimal and white. Use light shading with good contrast. "
+            "The caricature should be humorous and flattering, clearly recognizable "
+            "as the subject. Works great on thermal printer with bold lines and white space."
+        ),
+    },
+    "manga": {
+        "name": "MANGA",
+        "prompt": (
+            "Convert this photo into a Japanese manga panel illustration. "
+            "Use clean black ink lines, screentone dot patterns for shading, "
+            "and dramatic manga-style lighting with speed lines or effect lines. "
+            "Add manga-typical sparkle or emphasis effects where appropriate. "
+            "Preserve the subject's features in manga proportions with expressive eyes. "
+            "Black and white only, like a printed manga page. "
+            "Naturally suited for thermal printing with pure black and white contrast."
+        ),
+    },
+    #"stencil": {
+    #    "name": "STENCIL",
+    #    "prompt": (
+    #        "Transform this photo into a high-contrast stencil art style, similar to "
+    #        "Banksy or Shepard Fairey street art. Reduce the image to 2-3 tonal layers "
+    #        "with sharp cutoffs between light and dark. No gradients, only flat areas "
+    #        "of black and white with maybe one mid-gray tone. Bold and graphic. "
+    #        "Preserve the subject's recognizable silhouette and key facial features. "
+    #        "Extremely well suited for thermal printer output with stark contrast."
+    #    ),
+    #},
+    #"oil_painting": {
+    #    "name": "OLEO",
+    #    "prompt": (
+    #        "Transform this photo into a classical oil painting with visible brushstrokes "
+    #        "and rich texture. Use an impressionist approach with dabs of varied tones. "
+    #        "Keep the overall palette lighter to avoid large dark areas. "
+    #        "Emphasize light falling on the subject with a warm, painterly glow. "
+    #        "Preserve the subject's likeness and expression with artistic brushwork. "
+    #        "The textured brushstrokes will create interesting patterns when dithered "
+    #        "for thermal printing."
+    #    ),
+    #},
+}
+
 
 def upload_image(filepath: str, subfolder: str = "", image_type: str = "input") -> dict:
     """Upload an image to ComfyUI."""
@@ -123,17 +238,15 @@ def randomize_seeds(workflow: dict) -> dict:
     return workflow
 
 
-def replace_style_placeholder(workflow: dict, style: str) -> dict:
-    """Replace <STYLE> placeholder in CLIPTextEncode nodes with the actual style."""
+def replace_style_prompt(workflow: dict, prompt: str) -> dict:
+    """Replace the text in CLIPTextEncode nodes that contain <STYLE> with the full prompt."""
     for node_id, node in workflow.items():
         class_type = node.get("class_type", "")
         if class_type == "CLIPTextEncode":
             inputs = node.get("inputs", {})
             if "text" in inputs and "<STYLE>" in inputs["text"]:
-                original_text = inputs["text"]
-                new_text = original_text.replace("<STYLE>", style)
-                node["inputs"]["text"] = new_text
-                print(f"  Replaced <STYLE> in [{node_id}]: '{style}'")
+                node["inputs"]["text"] = prompt
+                print(f"  Set prompt in [{node_id}]: '{prompt[:60]}...'")
     return workflow
 
 
@@ -167,7 +280,7 @@ def upload_image_bytes(image_data: bytes, filename: str) -> dict:
         return json.loads(response.read())
 
 
-def process_image(image_data: bytes, style: str = "cartoon") -> tuple[bytes, str]:
+def process_image(image_data: bytes, prompt: str) -> tuple[bytes, str]:
     """Process an image through ComfyUI and return the result bytes and output path."""
     import os
     os.makedirs(OUTPUT_DIR, exist_ok=True)
@@ -190,9 +303,9 @@ def process_image(image_data: bytes, style: str = "cartoon") -> tuple[bytes, str
     print("Updating workflow with input image...")
     workflow = find_and_update_load_image_node(workflow, input_image_name)
 
-    # Replace style placeholder
-    print(f"Applying style: {style}")
-    workflow = replace_style_placeholder(workflow, style)
+    # Set the full style prompt
+    print(f"Applying prompt: {prompt[:60]}...")
+    workflow = replace_style_prompt(workflow, prompt)
 
     # Randomize seeds for varied outputs
     print("Randomizing seeds...")
@@ -235,9 +348,16 @@ def process_image(image_data: bytes, style: str = "cartoon") -> tuple[bytes, str
     raise Exception("No output images found!")
 
 
+@app.route("/styles", methods=["GET"])
+def styles_endpoint():
+    """Return the list of available styles with their IDs and display names."""
+    styles_list = [{"id": sid, "name": s["name"]} for sid, s in STYLES.items()]
+    return jsonify(styles_list)
+
+
 @app.route("/process", methods=["POST"])
 def process_endpoint():
-    """Accept an image and optional style parameter, return the processed result."""
+    """Accept an image and a style ID, return the processed result."""
     if "image" not in request.files:
         return jsonify({"error": "No image file provided"}), 400
 
@@ -245,13 +365,18 @@ def process_endpoint():
     if file.filename == "":
         return jsonify({"error": "No file selected"}), 400
 
-    # Get style from form data, default to "cartoon"
-    style = request.form.get("style", "cartoon")
-    print(f"Received style: {style}")
+    # Get style ID from form data, default to "cartoon"
+    style_id = request.form.get("style", "cartoon")
+    print(f"Received style: {style_id}")
+
+    if style_id not in STYLES:
+        return jsonify({"error": f"Unknown style: {style_id}"}), 400
+
+    prompt = STYLES[style_id]["prompt"]
 
     try:
         image_data = file.read()
-        result_data, output_path = process_image(image_data, style)
+        result_data, output_path = process_image(image_data, prompt)
 
         return send_file(
             io.BytesIO(result_data),
@@ -265,5 +390,7 @@ def process_endpoint():
 
 if __name__ == "__main__":
     print("Starting ComfyUI img2img web server on http://127.0.0.1:5000")
-    print("POST an image to /process endpoint")
+    print(f"Available styles: {list(STYLES.keys())}")
+    print("GET /styles - list available styles")
+    print("POST /process - process an image with a style")
     app.run(host="0.0.0.0", port=5000, debug=False)

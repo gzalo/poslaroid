@@ -96,8 +96,7 @@
   "75:71": {
     "inputs": {
       "clip_name": "qwen_3_4b.safetensors",
-      "type": "flux2",
-      "device": "default"
+      "type": "flux2"
     },
     "class_type": "CLIPLoader",
     "_meta": {

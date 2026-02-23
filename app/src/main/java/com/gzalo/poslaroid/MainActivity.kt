@@ -259,8 +259,7 @@ class MainActivity : AppCompatActivity() {
             try {
                 val apiUrlText = viewBinding.apiUrl.text.toString()
                 // Derive the styles URL from the process URL (same host, /styles path)
-                val baseUrl = apiUrlText.substringBeforeLast("/")
-                val stylesUrl = URL("$baseUrl/styles")
+                val stylesUrl = URL(apiUrlText + "/styles")
                 val conn = stylesUrl.openConnection() as HttpURLConnection
                 conn.requestMethod = "GET"
                 conn.connectTimeout = 3000
@@ -343,7 +342,7 @@ class MainActivity : AppCompatActivity() {
     private fun processStyleApi(bitmap: Bitmap, style: String): Bitmap? {
         try {
             val apiUrlText = viewBinding.apiUrl.text.toString()
-            val url = URL(apiUrlText)
+            val url = URL(apiUrlText + "/process")
             val httpConnection = url.openConnection() as HttpURLConnection
             httpConnection.requestMethod = "POST"
             httpConnection.doOutput = true

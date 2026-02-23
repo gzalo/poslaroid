@@ -27,6 +27,9 @@ import com.dantsu.escposprinter.connection.bluetooth.BluetoothConnection
 import com.dantsu.escposprinter.connection.bluetooth.BluetoothPrintersConnections
 import com.dantsu.escposprinter.textparser.PrinterTextParserImg
 import com.gzalo.poslaroid.databinding.ActivityMainBinding
+import android.widget.Button
+import android.widget.GridLayout
+import org.json.JSONArray
 import java.io.ByteArrayOutputStream
 import java.io.InputStream
 import java.net.HttpURLConnection
@@ -49,6 +52,10 @@ class MainActivity : AppCompatActivity() {
 
     // Store the captured bitmap for style processing
     private var capturedBitmap: Bitmap? = null
+
+    // Available styles loaded from server: list of (id, displayName) pairs
+    // null means "Normal" only (server unreachable)
+    private var availableStyles: List<Pair<String, String>>? = null
 
     @SuppressLint("MissingPermission")
     @SuppressWarnings("deprecation")
@@ -73,15 +80,12 @@ class MainActivity : AppCompatActivity() {
         viewBinding.switchCamera.setOnClickListener { switchCamera() }
         viewBinding.mirrorCamera.setOnClickListener { mirrorCamera() }
 
-        // Setup style button click listeners
-        viewBinding.styleNormal.setOnClickListener { onStyleSelected(null) }
-        viewBinding.styleCartoon.setOnClickListener { onStyleSelected("cartoon") }
-        viewBinding.styleAnime.setOnClickListener { onStyleSelected("anime") }
-        viewBinding.styleSketch.setOnClickListener { onStyleSelected("pencil sketch") }
-        viewBinding.styleOilPainting.setOnClickListener { onStyleSelected("oil painting") }
-        viewBinding.stylePixelArt.setOnClickListener { onStyleSelected("pixel art") }
-
         cameraExecutor = Executors.newSingleThreadExecutor()
+
+        viewBinding.loadStylesButton.setOnClickListener {
+            viewBinding.loadStylesButton.isEnabled = false
+            fetchStylesFromServer()
+        }
 
         connection = BluetoothPrintersConnections.selectFirstPaired()
         if (connection == null){
@@ -143,6 +147,7 @@ class MainActivity : AppCompatActivity() {
         viewBinding.mirrorCamera.visibility = View.INVISIBLE
         viewBinding.footerText.visibility = View.INVISIBLE
         viewBinding.apiUrl.visibility = View.INVISIBLE
+        viewBinding.loadStylesButton.visibility = View.INVISIBLE
         viewBinding.imageCaptureButton.visibility = View.INVISIBLE
 
         val imageCapture = imageCapture ?: return
@@ -181,11 +186,16 @@ class MainActivity : AppCompatActivity() {
                     capturedBitmap = BitmapFactory.decodeStream(inputStream)
                     inputStream.close()
 
-                    // Show style selection grid with preview
-                    runOnUiThread {
-                        viewBinding.printing.visibility = View.INVISIBLE
-                        viewBinding.previewImage.setImageBitmap(capturedBitmap)
-                        viewBinding.styleSelectionContainer.visibility = View.VISIBLE
+                    if (availableStyles == null) {
+                        // No styles loaded — skip selection and print directly
+                        onStyleSelected(null)
+                    } else {
+                        // Show style selection grid with preview
+                        runOnUiThread {
+                            viewBinding.printing.visibility = View.INVISIBLE
+                            viewBinding.previewImage.setImageBitmap(capturedBitmap)
+                            viewBinding.styleSelectionContainer.visibility = View.VISIBLE
+                        }
                     }
                 }
             }
@@ -244,10 +254,95 @@ class MainActivity : AppCompatActivity() {
         viewBinding.imageCaptureButton.visibility = View.VISIBLE
     }
 
+    private fun fetchStylesFromServer() {
+        Thread {
+            try {
+                val apiUrlText = viewBinding.apiUrl.text.toString()
+                // Derive the styles URL from the process URL (same host, /styles path)
+                val stylesUrl = URL(apiUrlText + "/styles")
+                val conn = stylesUrl.openConnection() as HttpURLConnection
+                conn.requestMethod = "GET"
+                conn.connectTimeout = 3000
+                conn.readTimeout = 3000
+
+                if (conn.responseCode == HttpURLConnection.HTTP_OK) {
+                    val response = conn.inputStream.bufferedReader().readText()
+                    conn.disconnect()
+                    val jsonArray = JSONArray(response)
+                    val styles = mutableListOf<Pair<String, String>>()
+                    for (i in 0 until jsonArray.length()) {
+                        val obj = jsonArray.getJSONObject(i)
+                        styles.add(Pair(obj.getString("id"), obj.getString("name")))
+                    }
+                    availableStyles = styles
+                    Log.i(TAG, "Loaded ${styles.size} styles from server")
+                    runOnUiThread {
+                        Toast.makeText(baseContext, "Se cargaron ${styles.size} estilos", Toast.LENGTH_SHORT).show()
+                    }
+                } else {
+                    conn.disconnect()
+                    Log.w(TAG, "Server returned ${conn.responseCode}, falling back to Normal only")
+                    availableStyles = null
+                }
+            } catch (e: Exception) {
+                Log.w(TAG, "Could not fetch styles from server: ${e.message}")
+                availableStyles = null
+            }
+
+            runOnUiThread { populateStyleButtons() }
+        }.start()
+    }
+
+    private fun populateStyleButtons() {
+        val grid = viewBinding.styleGrid
+        grid.removeAllViews()
+
+        // Always add the Normal button first
+        val normalBtn = Button(this).apply {
+            text = getString(R.string.style_normal)
+            layoutParams = GridLayout.LayoutParams().apply {
+                width = (150 * resources.displayMetrics.density).toInt()
+                height = (80 * resources.displayMetrics.density).toInt()
+                setMargins(
+                    (8 * resources.displayMetrics.density).toInt(),
+                    (8 * resources.displayMetrics.density).toInt(),
+                    (8 * resources.displayMetrics.density).toInt(),
+                    (8 * resources.displayMetrics.density).toInt()
+                )
+            }
+            setOnClickListener { onStyleSelected(null) }
+        }
+        grid.addView(normalBtn)
+
+        // Add server styles if available
+        val styles = availableStyles ?: return
+        for ((id, name) in styles) {
+            val btn = Button(this).apply {
+                text = name
+                layoutParams = GridLayout.LayoutParams().apply {
+                    width = (150 * resources.displayMetrics.density).toInt()
+                    height = (80 * resources.displayMetrics.density).toInt()
+                    setMargins(
+                        (8 * resources.displayMetrics.density).toInt(),
+                        (8 * resources.displayMetrics.density).toInt(),
+                        (8 * resources.displayMetrics.density).toInt(),
+                        (8 * resources.displayMetrics.density).toInt()
+                    )
+                }
+                setOnClickListener { onStyleSelected(id) }
+            }
+            grid.addView(btn)
+        }
+
+        // Update grid row count based on number of buttons
+        val totalButtons = 1 + styles.size
+        grid.rowCount = (totalButtons + 1) / 2
+    }
+
     private fun processStyleApi(bitmap: Bitmap, style: String): Bitmap? {
         try {
             val apiUrlText = viewBinding.apiUrl.text.toString()
-            val url = URL(apiUrlText)
+            val url = URL(apiUrlText + "/process")
             val httpConnection = url.openConnection() as HttpURLConnection
             httpConnection.requestMethod = "POST"
             httpConnection.doOutput = true
@@ -324,7 +419,15 @@ class MainActivity : AppCompatActivity() {
 
             connection?.connect()
             printer?.printFormattedText( text.toString() + viewBinding.footerText.text)
-            Thread.sleep(3000);
+            runOnUiThread {
+                viewBinding.printing.text = getString(R.string.printing)
+                viewBinding.printing.visibility = View.INVISIBLE
+                viewBinding.countdownView.visibility = View.VISIBLE
+                viewBinding.countdownView.start(4000) {
+                    viewBinding.countdownView.visibility = View.INVISIBLE
+                }
+            }
+            Thread.sleep(4000)
             connection?.disconnect()
         } catch (e: Exception) {
             Log.e(TAG, "Print error: ${e.message}", e)

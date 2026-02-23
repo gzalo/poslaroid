@@ -102,8 +102,10 @@ public class BluetoothConnection extends DeviceConnection {
         this.data = new byte[0];
         if (this.outputStream != null) {
             try {
+                this.outputStream.flush();
+                Thread.sleep(1000);
                 this.outputStream.close();
-            } catch (IOException e) {
+            } catch (IOException | InterruptedException e) {
                 e.printStackTrace();
             }
             this.outputStream = null;
